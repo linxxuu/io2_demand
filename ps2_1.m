@@ -1,4 +1,4 @@
-% PS2 Demand
+l% PS2 Demand
 
 %% Input Data
 clc
@@ -70,7 +70,7 @@ str = [bhat(1:5,1) se1ols(1:5,1)];
  
  phat= Z*bhatFS;
  X= [ones(970,1) p x1 x2 x3];
- Y= log(s);
+ Y= log(s)-log(s0);
  Xhat= [ones(970,1) phat x1 x2 x3];
  bhat2SLS = (Xhat'*X)\(Xhat'*Y); 
  se2SLS= sqrt(diag(mean((Y-X*bhat2SLS).^2)*((X'*X)\eye(size(X,2)))));
