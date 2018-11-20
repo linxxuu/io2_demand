@@ -1,8 +1,9 @@
-l% PS2 Demand
+% PS2 Demand
 
 %% Input Data
 clc
 clear all
+global s s0 x1 x2 x3 p c1 c2 c3 j mid
 
 %M= csvread('Data.csv');
 Data= dlmread('Data.csv');
@@ -14,9 +15,9 @@ x1 = Data(:, 4);
 x2 = Data(:, 5);
 x3 = Data(:, 6);
 p = Data(:, 7);
-w_cost1= Data(:, 8);
-w_cost2= Data(:, 9);
-w_cost3= Data(:, 10);
+c1= Data(:, 8);
+c2= Data(:, 9);
+c3= Data(:, 10);
 group_id= Data(:, 11);
 
 
@@ -52,7 +53,7 @@ str = [bhat(1:5,1) se1ols(1:5,1)];
  % first stage: cost shifters and product characteristics 
  %Question: whether including constant term in first stage? 
 
- Z= [ones(970,1) w_cost1 w_cost2 w_cost3 x1 x2 x3];
+ Z= [ones(970,1) c1 c2 c3 x1 x2 x3];
  bhatFS = (Z'*Z)\(Z'*p);
  se1FS= sqrt(diag(mean((p-Z*bhatFS).^2)*((Z'*Z)\eye(size(Z,2)))));
  vars = ['const     ';'w1        ';'w2        ';'w3        ';'X1        ';'X2        ';'X3        '];
@@ -127,9 +128,25 @@ end
  
 %% 1.3 GMM 
 
- global alpha gamma0 gamma1 gamma2 gamma3 b_x1 b_x2 b_x3 b0 
+
  
+
+
+ theta= ones(9,1);
+
+% theta= (alpha b0 b1 b2 b3 gamma0 gamma1 gamma2 gamma3)
+ theta= [bhat2SLS(1:5)' 0 0 0 0];
+ theta = fminunc('gmm_obj',theta); 
  
+
+ %% 1.4test
+ [param,fval,exitflag,output,grad1,hess1] = fminunc('gmm_obj', theta, optimset('Display','iter','TolX',1e-3,'TolFun',1e-8));
+ vars = ['b0        ';'alpha     ';'b1        ';'b2        ';'b3        ';'gamma1    ';'gamma2    ';'gamma3    '];
  
- 
- 
+ disp('**********************************************');
+ disp('GMM estimation by cost shifters and supply equations:');
+ disp('**********************************************');
+%  
+%  disp(['  Vars    ','     Coeff','    ','Std Err']);
+%  str = param';
+%  disp([vars,num2str(str)]);
