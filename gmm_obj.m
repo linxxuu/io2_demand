@@ -34,10 +34,12 @@ function f = gmm_obj(theta)
     sig = [f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10];
     sig = sig'*sig;
     
+   
+    
     g=[mean(f0) mean(f1) mean(f2) mean(f3) mean(f4) mean(f5) mean(f6) mean(f7) mean(f8) mean(f9) mean(f10)]';
 
     f= 970*g'*inv(sig)*g;
 
-
+    % f= 970*g'*g;
 end
 

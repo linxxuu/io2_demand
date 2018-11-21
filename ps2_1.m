@@ -141,12 +141,44 @@ end
 
  %% 1.4test
  [param,fval,exitflag,output,grad1,hess1] = fminunc('gmm_obj', theta, optimset('Display','iter','TolX',1e-3,'TolFun',1e-8));
- vars = ['b0        ';'alpha     ';'b1        ';'b2        ';'b3        ';'gamma1    ';'gamma2    ';'gamma3    '];
+ vars = ['b0        ';'alpha     ';'b1        ';'b2        ';'b3        ';'gamma0    ';'gamma1    ';'gamma2    ';'gamma3    '];
  
  disp('**********************************************');
  disp('GMM estimation by cost shifters and supply equations:');
  disp('**********************************************');
 %  
-%  disp(['  Vars    ','     Coeff','    ','Std Err']);
-%  str = param';
-%  disp([vars,num2str(str)]);
+ disp([' Vars','       Coeff','    ','Std Err']);
+  str = param';
+  disp([vars,num2str(str)]);
+  
+  
+ % 2 Nested logit
+ %% 2.1 create sg contains group share:
+ sg= zeros(970,1);
+for i=1:970
+    sg(i)= ((group_id==group_id(i)).*(mid==mid(i)))'*s;
+    
+end
+
+
+
+ % 3 Random coefficients logit model
+ %% 3.1 
+ 
+ % NS: number of simulations (each simulation is similar to each consumer) 
+ NS= 20;
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
