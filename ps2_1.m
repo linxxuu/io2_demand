@@ -196,6 +196,8 @@ while chg_ > 0.1
     disp(chg_);
 end
 
+%NOTE: elasticities and comparison needed.
+
 %% 2 Nested logit
 % 2.1 create sg contains group share: 
 sh_gp= zeros(970,1);
