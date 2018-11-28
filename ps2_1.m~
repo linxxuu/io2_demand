@@ -1,0 +1,271 @@
+% PS2 Demand
+
+%% Input Data
+clc
+clear all
+global s s0 sh_g x1 x2 x3 p c1 c2 c3 j mid
+
+%M= csvread('Data.csv');
+Data= dlmread('Data.csv');
+
+%Sort based on markt id
+Data = sortrows(Data,1);
+
+%Sort each market by market share
+start = 1;
+Data_sorted = zeros(size(Data));
+top2_ = zeros(size(Data,1),1);
+for mid_i_=1:50
+    market_which_ = (Data(:,1) == mid_i_);
+    market_i_ = Data(market_which_,:);
+    market_i_ = sortrows(market_i_,3);
+    
+    Data_sorted(start:start+size(market_i_,1)-1,:) = market_i_;
+    top2_(start+size(market_i_,1)-2:start+size(market_i_,1)-1) = 1:2;
+    
+    start = start+size(market_i_,1);
+end
+
+
+mid = Data_sorted(:, 1);
+j = Data_sorted(:, 2);
+s = Data_sorted(:, 3);
+x1 = Data_sorted(:, 4);
+x2 = Data_sorted(:, 5);
+x3 = Data_sorted(:, 6);
+p = Data_sorted(:, 7);
+c1= Data_sorted(:, 8);
+c2= Data_sorted(:, 9);
+c3= Data_sorted(:, 10);
+group_id= Data_sorted(:, 11);
+
+% calculate outside options: 
+s0= zeros(970,1);
+for i=1:970
+    
+    s0(i)= 1- (mid(:) == mid(i))'*s;
+    
+end
+
+%% 1.1 Pooled OLS 
+
+Y= log(s)-log(s0);
+X= [ones(970,1) p x1 x2 x3];
+    n = size(X,1);
+    n_vars = size(X, 2);
+
+bhat = (X'*X)\(X'*Y);
+se1ols= sqrt(diag(n/(n-n_vars)*mean((Y-X*bhat).^2)*((X'*X)\eye(size(X,2)))));
+
+vars = ['const     ';'Price     ';'X1        ';'X2        ';'X3        '];
+varstr = [bhat(1:5,1) se1ols(1:5,1)];
+disp('**********************************************');
+disp('Pooled OLS Estimation in Logit Model:');
+disp('**********************************************');
+disp([' Vars','       Coeff','    ','Std Err']);
+disp([vars, num2str(varstr)]);
+disp(' ');
+disp(' ');
+disp(' ');
+ 
+%% 1.2.1 IV
+
+% first stage: cost shifters and product characteristics 
+% *Question*: whether including constant term in first stage? 
+% Ante: Yes. First stage should generally include _all controls_ used in
+% second stage (as we are interested in conditional correlation of the
+% instrument and the variable of interest). Constant can be viewed as "one
+% control".
+
+Z= [ones(970,1) c1 c2 c3 x1 x2 x3];
+    n = size(Z,1);
+    n_vars = size(Z, 2);
+
+bhatFS = (Z'*Z)\(Z'*p);
+se1FS= sqrt(diag(n/(n-n_vars)*mean((p-Z*bhatFS).^2)*((Z'*Z)\eye(size(Z,2)))));
+
+vars = ['const     ';'w1        ';'w2        ';'w3        ';...
+    'X1        ';'X2        ';'X3        '];
+str = [bhatFS se1FS];
+disp('**********************************************');
+disp('IV: First Stage Estimation in Logit Model:');
+disp('**********************************************');
+disp([' Vars','       Coeff','    ','Std Err']);
+disp([vars, num2str(str)]);
+disp(' ');
+disp(' ');
+disp(' ');
+
+% NOTE: need to calculate F and p 
+ 
+ 
+phat= Z*bhatFS;
+X= [ones(970,1) p x1 x2 x3];
+Y= log(s)-log(s0);
+Xhat= [ones(970,1) phat x1 x2 x3];
+    n = size(X,1);
+    n_vars = size(X, 2);
+     
+bhat2SLS = (Xhat'*X)\(Xhat'*Y); 
+se2SLS= sqrt(diag(iv_vcov(bhat2SLS)));
+ 
+vars = ['Const     ';'Price     ';'X1        ';'X2        ';'X3        '];
+str = [bhat2SLS se2SLS];
+disp('**********************************************');
+disp('IV Estimation by cost shifters in Logit Model:');
+disp('**********************************************');
+disp([' Vars','       Coeff','    ','Std Err']);
+disp([vars, num2str(str)]);
+disp(' ');
+disp(' ');
+disp(' ');
+
+disp('Endogeous bias is upward bias, suggestting that the unobserved') 
+disp('endogeous which may be postively correlatd with price and also ')
+disp('have postive effect on market share, e.g. advertising will inc-')
+disp('rease price but will also make products more attractive to consumers')
+ 
+%% 1.2.2 Own-price elasticities /cross price elasticities 
+
+%NOTE: this should be done market by market, and only then averaged over
+%all the markets to get the answer. I am not sure it gives the same answer.
+%Ante
+
+epsilon1= bhat2SLS(2,1).*p.*(1-s);
+epsilon2= -bhat2SLS(2,1).*p.*s;
+array1= [mid j p s epsilon1 epsilon2];
+
+epsilon_jj = NaN([max(j) 1]);
+for i=1:max(j)
+    epsilon_jj(i,1)= ((array1(:, 2) == i)'*epsilon1)/ sum(array1(:, 2) == i);
+end
+
+epsilon_matrix= zeros(max(j),max(j));
+for r= 1:max(j)
+    for c= 1:max(j)
+        if r==c
+            epsilon_matrix(r,c)= epsilon_jj(r,1);
+        else 
+            epsilon_matrix(r,c)= (array1(:, 2) == c)'*epsilon2/...
+                sum(array1(:, 2) == c);          
+        end
+    end
+end  
+disp('**********************************************');
+disp('Slutsky Substitution Matrix is: ');
+disp('**********************************************');
+disp(epsilon_matrix);
+
+%% 1.3. 2. GMM, version: Lin
+
+start_theta = [bhat2SLS; bhatFS(1:4)];
+options = optimset('Display','iter', 'TolX',1e-3,...
+    'TolFun',1e-8,  'PlotFcns', @optimplotfval);
+[param_gmm,fval,exitflag,output,grad1,hess1] = ...
+    fminunc('gmm_obj', start_theta, options);
+sig_param_gmm = gmm_obj_vcov(param_gmm);
+se_param_gmm = sqrt(diag(sig_param_gmm));
+ 
+vars = ['b0        ';'alpha     ';'b1        ';'b2        ';'b3        ';...
+    'gamma0    ';'gamma1    ';'gamma2    ';'gamma3    '];
+disp('**********************************************');
+disp('GMM estimation by cost shifters and supply equations:');
+disp('**********************************************');
+
+disp([' Vars','       Coeff','    ','Std Err']);
+disp([vars, num2str(param_gmm), blanks(9)', blanks(9)',...
+    blanks(9)', num2str(se_param_gmm)]);
+  
+%% 1.4. Merger
+
+chg_= 10;
+p_old = p;
+sh_old = s;
+i=1;
+clear p_hist s_hist
+%top2_0 = zeros(size(top2_));
+while chg_ > 0.1
+    Data_temp = Data_sorted;
+    Data_temp(:, 7) = p_old;
+    Data_temp(:, 3) = sh_old;
+    [sh_new, p_new] = update_ps_logit(Data_temp, top2_, param_gmm);
+    chg_ = max(abs(sh_new-sh_old)) + max(abs(p_new - p_old));
+    p_old = p_new;
+    sh_old = sh_new;
+    Data_temp(:, 7) = p_new;
+    Data_temp(:, 3) = sh_new;
+    disp(chg_);
+    p_hist(:,i) = p_new;
+    s_hist(:,i) = sh_new;
+    
+    
+    
+    if i>1
+        p_i = find(p_hist(:,i)-p_hist(:,i-1) == max(p_hist(:,i)-p_hist(:,i-1)));
+        s_i = find(s_hist(:,i)-s_hist(:,i-1) == max(s_hist(:,i)-s_hist(:,i-1)));
+        disp('p_i= ');
+        disp(p_i);
+        disp(max(p_hist(:,i)-p_hist(:,i-1)));
+        disp('s_i= ');
+        disp(s_i);
+        disp(max(s_hist(:,i)-s_hist(:,i-1)));
+    end
+    i=i+1;
+end
+
+%% 2 Nested logit
+% 2.1 create sg contains group share: 
+sh_gp= zeros(970,1);
+for i=1:970
+    sh_gp(i)= (group_id==group_id(i) & mid==mid(i))'*s; 
+end
+sh_g = s./sh_gp;
+
+Z= [ones(970,1) c1 c2 c3 x1 x2 x3 log(sh_g)];
+    n = size(Z,1);
+    n_vars = size(Z, 2);
+bhatFS_NL = (Z'*Z)\(Z'*p); 
+phat= Z*bhatFS_NL;
+
+X= [ones(970,1) p x1 x2 x3 log(sh_g)];
+Y= log(s)-log(s0);
+Xhat= [ones(970,1) phat x1 x2 x3 log(sh_g)];
+    n = size(X,1);
+    n_vars = size(X, 2);
+     
+bhat_NL = (Xhat'*X)\(Xhat'*Y); 
+%NOTE: huge s.e.. Maybe check.
+se_NL= sqrt(diag(iv_vcov_NL(bhat_NL)));
+
+vars = ['const     ';'Price     ';'X1        ';'X2        ';...
+    'X3        ';'omega     '];
+varstr = [bhat_NL se_NL];
+disp('**********************************************');
+disp('Nested Logit Model:');
+disp('**********************************************');
+disp([' Vars','       Coeff','    ','Std Err']);
+disp([vars, num2str(varstr)]);
+disp(' ');
+disp(' ');
+disp(' ');
+
+ %% 3 Random coefficients logit model
+ % 3.1 
+ 
+ % NS: number of simulations (each simulation is similar to each consumer) 
+ NS= 20;
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
